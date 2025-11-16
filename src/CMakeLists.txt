@@ -1,4 +1,5 @@
-add_executable(${PROJECT_NAME} main.cu testCuda.cu)
+add_executable(${PROJECT_NAME} main.cu testCuda.cu
+        headMap.cu)
 
 set_target_properties(Heat_Transfer PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
