@@ -1,4 +1,5 @@
 #include <SDL3/SDL.h>
+#include "testCuda.hpp"
 #include <iostream>
 
 int main(int argc, char* argv[]) {
@@ -28,6 +29,8 @@ int main(int argc, char* argv[]) {
         SDL_SetRenderDrawColor(renderer, 200, 0, 0, 255);
         std::cout << "Render created" << std::endl;
     }
+
+    testCuda();
 
     // Event loop
     bool quit = false;
