@@ -69,11 +69,11 @@ int main(int, char**) {
     if (!heat_alloc(sim, nx, ny)) { std::fprintf(stderr, "Failed to allocate device buffers\n"); return 1; }
 
     // Hot disk init
-    std::vector<float> h_init(nx * ny, 0.0f);
+    std::vector<float> h_init(nx * ny, -1.0f); // start cold background
     const int cx = nx/2, cy = ny/2, r = nx/10;
     for (int j=-r; j<=r; ++j) for (int i=-r; i<=r; ++i) {
         int x = cx+i, y = cy+j;
-        if (x>=0 && x<nx && y>=0 && y<ny && (i*i + j*j) <= r*r) h_init[y*nx + x] = 1.0f;
+        if (x>=0 && x<nx && y>=0 && y<ny && (i*i + j*j) <= r*r) h_init[y*nx + x] = 1.0f; // hot disk
     }
     heat_upload(sim, h_init.data());
 
@@ -83,6 +83,7 @@ int main(int, char**) {
     bool mouse_down = false;
     bool paint_hot = true;
     int  brush_radius = 10;
+    int  steps_per_frame = 2;
 
     while (running) {
         SDL_Event ev;
@@ -129,6 +130,7 @@ int main(int, char**) {
         if (ImGui::RadioButton("Cold (-1)", paint_mode == 0)) paint_mode = 0;
         paint_hot = (paint_mode == 1);
         ImGui::SliderInt("Brush radius", &brush_radius, 1, 100);
+        ImGui::SliderInt("Heat speed (steps/frame)", &steps_per_frame, 1, 20);
         ImGui::TextUnformatted("Left-click paints. Mouse wheel or slider adjusts radius.");
         ImGui::End();
 
@@ -141,8 +143,9 @@ int main(int, char**) {
             heat_paint(sim, tx, ty, brush_radius, paint_hot ? 1.0f : -1.0f);
         }
 
-        // A couple of steps per frame
-        for (int k = 0; k < 2; ++k) heat_step(sim, alpha, dx, dt);
+        // Advance simulation
+        int iter = std::clamp(steps_per_frame, 1, 20);
+        for (int k = 0; k < iter; ++k) heat_step(sim, alpha, dx, dt);
 
         // Map temps -> RGBA on device, copy back for SDL texture update
         heat_to_rgba(sim, h_rgba.data(), -1.0f, 1.0f);

@@ -26,27 +26,32 @@ __global__ void k_copy_edges(float* v, const float* u, int nx, int ny) {
 __global__ void k_to_rgba(const float* u, unsigned char* rgba, int n, float umin, float umax) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k>=n) return;
-    // Symmetric map: cold -> blue, neutral -> green, hot -> red.
-    float span = fmaxf(fabsf(umin), fabsf(umax));
-    span = fmaxf(span, 1e-6f); // avoid divide-by-zero
-    float t = fminf(1.f, fmaxf(-1.f, u[k] / span)); // -1 cold, 0 neutral, 1 hot
+    // Hue-based map: cold -> blue, hot -> red, full brightness (no black gaps).
+    float span = umax - umin;
+    span = fmaxf(span, 1e-6f);
+    float t = (u[k] - umin) / span;        // 0 cold, 1 hot
+    t = fminf(1.f, fmaxf(0.f, t));
 
-    unsigned char r = 0, g = 0, b = 0;
-    if (t < 0.0f) {
-        // Blue to green
-        float w = t + 1.0f; // 0 at coldest, 1 at neutral
-        g = static_cast<unsigned char>(255.0f * w);
-        b = static_cast<unsigned char>(255.0f * (1.0f - w));
-    } else {
-        // Green to red
-        float w = t; // 0 at neutral, 1 at hottest
-        r = static_cast<unsigned char>(255.0f * w);
-        g = static_cast<unsigned char>(255.0f * (1.0f - w));
+    // HSV to RGB with S=1, V=1, hue from 240° (blue) to 0° (red)
+    float h = (1.0f - t) * (2.0f / 3.0f);  // 0..1
+    float hf = h * 6.0f;
+    int   i  = (int)hf;
+    float f  = hf - i;
+    float p = 0.0f;
+    float q = 1.0f - f;
+    float r=0,g=0,b=0;
+    switch (i % 6) {
+        case 0: r = 1.0f; g = f;     b = 0.0f; break;
+        case 1: r = q;    g = 1.0f;  b = 0.0f; break;
+        case 2: r = 0.0f; g = 1.0f;  b = f;    break;
+        case 3: r = 0.0f; g = q;     b = 1.0f; break;
+        case 4: r = f;    g = 0.0f;  b = 1.0f; break;
+        case 5: r = 1.0f; g = 0.0f;  b = q;    break;
     }
 
-    rgba[4*k+0] = r;
-    rgba[4*k+1] = g;
-    rgba[4*k+2] = b;
+    rgba[4*k+0] = static_cast<unsigned char>(255.0f * r);
+    rgba[4*k+1] = static_cast<unsigned char>(255.0f * g);
+    rgba[4*k+2] = static_cast<unsigned char>(255.0f * b);
     rgba[4*k+3] = 255;
 }
 
