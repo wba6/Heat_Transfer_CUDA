@@ -1,5 +1,29 @@
 
+include(FetchContent)
+
 add_subdirectory(SDL)
 
+FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG v1.91.4-docking
+        GIT_SHALLOW TRUE
+)
+FetchContent_GetProperties(imgui)
+if (NOT imgui_POPULATED)
+        FetchContent_MakeAvailable(imgui)
+endif()
+
+add_library(imgui STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp
+)
+target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+target_link_libraries(imgui PUBLIC SDL3-static)
+
 add_library(vendor INTERFACE)
-target_link_libraries(vendor INTERFACE SDL3-static)
+target_link_libraries(vendor INTERFACE SDL3-static imgui)

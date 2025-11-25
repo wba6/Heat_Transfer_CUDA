@@ -26,12 +26,27 @@ __global__ void k_copy_edges(float* v, const float* u, int nx, int ny) {
 __global__ void k_to_rgba(const float* u, unsigned char* rgba, int n, float umin, float umax) {
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     if (k>=n) return;
-    float t = (u[k]-umin) / (umax-umin + 1e-6f);
-    t = fminf(1.f, fmaxf(0.f, t));
-    unsigned char c = static_cast<unsigned char>(255.0f * t);
-    rgba[4*k+0] = c;
-    rgba[4*k+1] = 0;
-    rgba[4*k+2] = 255 - c;
+    // Symmetric map: cold -> blue, neutral -> green, hot -> red.
+    float span = fmaxf(fabsf(umin), fabsf(umax));
+    span = fmaxf(span, 1e-6f); // avoid divide-by-zero
+    float t = fminf(1.f, fmaxf(-1.f, u[k] / span)); // -1 cold, 0 neutral, 1 hot
+
+    unsigned char r = 0, g = 0, b = 0;
+    if (t < 0.0f) {
+        // Blue to green
+        float w = t + 1.0f; // 0 at coldest, 1 at neutral
+        g = static_cast<unsigned char>(255.0f * w);
+        b = static_cast<unsigned char>(255.0f * (1.0f - w));
+    } else {
+        // Green to red
+        float w = t; // 0 at neutral, 1 at hottest
+        r = static_cast<unsigned char>(255.0f * w);
+        g = static_cast<unsigned char>(255.0f * (1.0f - w));
+    }
+
+    rgba[4*k+0] = r;
+    rgba[4*k+1] = g;
+    rgba[4*k+2] = b;
     rgba[4*k+3] = 255;
 }
 
@@ -42,7 +57,13 @@ __global__ void k_paint(float* u, int nx, int ny, int cx, int cy, int r, float a
     int dx = i - cx;
     int dy = j - cy;
     if (dx*dx + dy*dy <= r*r) {
-        u[j*nx + i] += amount;
+        float current = u[j*nx + i];
+        // Paint pulls values toward the requested amount so cold stays blue and hot stays red.
+        if (amount >= 0.0f) {
+            u[j*nx + i] = fmaxf(current, amount);
+        } else {
+            u[j*nx + i] = fminf(current, amount);
+        }
     }
 }
 
