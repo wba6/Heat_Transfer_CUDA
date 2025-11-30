@@ -1,14 +1,12 @@
-// main.cpp — SDL3 version (Windows/MSVC friendly)
 #include <SDL3/SDL.h>
 #include <cstdio>
 #include <vector>
-#include <algorithm>   // std::clamp
+#include <algorithm>
 #include "imgui.h"
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_sdlrenderer3.h"
 #include "heat.cuh"
 
-// RAII cleanup
 struct SdlCleanup {
     SDL_Window*   window{nullptr};
     SDL_Renderer* renderer{nullptr};
@@ -64,7 +62,6 @@ int main(int, char**) {
         return 1;
     }
 
-    // --- GPU sim state ---
     HeatSim sim;
     if (!heat_alloc(sim, nx, ny)) { std::fprintf(stderr, "Failed to allocate device buffers\n"); return 1; }
 
@@ -93,7 +90,6 @@ int main(int, char**) {
             case SDL_EVENT_QUIT:
                 running = false; break;
             case SDL_EVENT_KEY_DOWN:
-                // SDL3: use ev.key.key (SDL_Keycode), not ev.key.keysym
                 if (ev.key.key == SDLK_ESCAPE) running = false;
                 break;
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -103,7 +99,6 @@ int main(int, char**) {
                 if (ev.button.button == SDL_BUTTON_LEFT) mouse_down = false;
                 break;
             case SDL_EVENT_MOUSE_WHEEL: {
-                // SDL3 wheel.y is float; convert to an int step for clamp to be unambiguous
                 if (!io.WantCaptureMouse) {
                     int step = (ev.wheel.y > 0.0f) ? 1 : (ev.wheel.y < 0.0f ? -1 : 0);
                     brush_radius = std::clamp(brush_radius + step, 1, 100);
@@ -117,8 +112,6 @@ int main(int, char**) {
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
-        // Allow docking and detach to secondary windows; passthrough so the main viewport still
-        // receives mouse for painting.
         ImGuiDockNodeFlags dock_flags = ImGuiDockNodeFlags_PassthruCentralNode |
                                         ImGuiDockNodeFlags_NoDockingInCentralNode;
         ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), dock_flags);
