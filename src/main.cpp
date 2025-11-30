@@ -40,7 +40,7 @@ int main(int, char**) {
     sdl.renderer = SDL_CreateRenderer(sdl.window, nullptr);
     if (!sdl.renderer) { std::fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError()); return 1; }
 
-    sdl.texture = SDL_CreateTexture(sdl.renderer, SDL_PIXELFORMAT_RGBA8888,
+    sdl.texture = SDL_CreateTexture(sdl.renderer, SDL_PIXELFORMAT_ABGR8888,
                                     SDL_TEXTUREACCESS_STREAMING, nx, ny);
     if (!sdl.texture) { std::fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError()); return 1; }
 
