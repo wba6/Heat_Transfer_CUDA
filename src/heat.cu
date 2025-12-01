@@ -13,6 +13,58 @@ __global__ void k_heat_step(const float* __restrict__ u, float* __restrict__ v,
     v[idx] = uc + r * lap;
 }
 
+// Shared-memory tiled version of the heat step. Each block caches its interior
+// plus a one-cell halo, so neighbor reads hit shared memory instead of DRAM.
+__global__ void k_heat_step_tiled(const float* __restrict__ u, float* __restrict__ v,
+                                  int nx, int ny, float r) {
+    extern __shared__ float tile[];
+    const int pitch = blockDim.x + 2;        // shared row stride with halo
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int j = blockIdx.y * blockDim.y + threadIdx.y;
+    const int tx = threadIdx.x + 1;
+    const int ty = threadIdx.y + 1;
+    const int idx = j * nx + i;
+
+    // Load center cell if in bounds; otherwise place a neutral value.
+    float center = 0.0f;
+    if (i < nx && j < ny) {
+        center = u[idx];
+    }
+    tile[ty * pitch + tx] = center;
+
+    // Halo loads. Use the center value when the neighbor would be out of bounds.
+    if (threadIdx.x == 0) {
+        float left = center;
+        if (i > 0 && i < nx && j < ny) left = u[idx - 1];
+        tile[ty * pitch + 0] = left;
+    }
+    if (threadIdx.x == blockDim.x - 1) {
+        float right = center;
+        if (i + 1 < nx && j < ny) right = u[idx + 1];
+        tile[ty * pitch + (pitch - 1)] = right;
+    }
+    if (threadIdx.y == 0) {
+        float up = center;
+        if (j > 0 && i < nx) up = u[idx - nx];
+        tile[0 * pitch + tx] = up;
+    }
+    if (threadIdx.y == blockDim.y - 1) {
+        float down = center;
+        if (j + 1 < ny && i < nx) down = u[idx + nx];
+        tile[(blockDim.y + 1) * pitch + tx] = down;
+    }
+
+    __syncthreads();
+
+    if (i<=0 || j<=0 || i>=nx-1 || j>=ny-1) return;
+
+    float uc = tile[ty * pitch + tx];
+    float lap = tile[ty * pitch + (tx - 1)] + tile[ty * pitch + (tx + 1)]
+              + tile[(ty - 1) * pitch + tx] + tile[(ty + 1) * pitch + tx]
+              - 4.0f * uc;
+    v[idx] = uc + r * lap;
+}
+
 __global__ void k_copy_edges(float* v, const float* u, int nx, int ny) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -99,7 +151,8 @@ void heat_step(HeatSim& sim, float alpha, float dx, float dt) {
     float r = alpha * dt / (dx*dx); // assume dx == dy
     dim3 block(16,16);
     dim3 grid((sim.nx + block.x - 1)/block.x, (sim.ny + block.y - 1)/block.y);
-    k_heat_step<<<grid, block>>>(sim.d_u, sim.d_v, sim.nx, sim.ny, r);
+    size_t shmem = static_cast<size_t>(block.x + 2) * (block.y + 2) * sizeof(float);
+    k_heat_step_tiled<<<grid, block, shmem>>>(sim.d_u, sim.d_v, sim.nx, sim.ny, r);
     k_copy_edges<<<grid, block>>>(sim.d_v, sim.d_u, sim.nx, sim.ny);
     // swap
     float* tmp = sim.d_u; sim.d_u = sim.d_v; sim.d_v = tmp;
