@@ -8,9 +8,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE )
 target_link_libraries(${PROJECT_NAME} PRIVATE vendor)
 
 # Add the timing test executable
-add_executable(timing_test timing_test.cpp heat.cu)
+add_executable(timing_test timing_test.cu heat.cu)
 set_target_properties(timing_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-target_link_libraries(timing_test PRIVATE vendor)
 
 # Add tests
 add_test(NAME timing_test COMMAND timing_test)

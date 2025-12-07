@@ -171,3 +171,42 @@ void heat_paint(HeatSim& sim, int cx, int cy, int radius, float amount) {
     dim3 grid((sim.nx + block.x - 1)/block.x, (sim.ny + block.y - 1)/block.y);
     k_paint<<<grid, block>>>(sim.d_u, sim.nx, sim.ny, cx, cy, radius, amount);
 }
+
+// Kernel-level wrappers for timing
+void heat_kernel_step_tiled(HeatSim& sim, float alpha, float dx, float dt) {
+    float r = alpha * dt / (dx*dx); // assume dx == dy
+    dim3 block(16,16);
+    dim3 grid((sim.nx + block.x - 1)/block.x, (sim.ny + block.y - 1)/block.y);
+    size_t shmem = static_cast<size_t>(block.x + 2) * (block.y + 2) * sizeof(float);
+    k_heat_step_tiled<<<grid, block, shmem>>>(sim.d_u, sim.d_v, sim.nx, sim.ny, r);
+    // No swap here, just the kernel
+}
+
+void heat_kernel_copy_edges(HeatSim& sim) {
+    dim3 block(16,16);
+    dim3 grid((sim.nx + block.x - 1)/block.x, (sim.ny + block.y - 1)/block.y);
+    k_copy_edges<<<grid, block>>>(sim.d_v, sim.d_u, sim.nx, sim.ny);
+}
+
+void heat_kernel_to_rgba(HeatSim& sim, float umin, float umax) {
+    size_t n = static_cast<size_t>(sim.nx) * sim.ny;
+    int threads = 256;
+    int blocks = (int)((n + threads - 1)/threads);
+    k_to_rgba<<<blocks, threads>>>(sim.d_u, sim.d_rgba, (int)n, umin, umax);
+}
+
+void heat_kernel_paint(HeatSim& sim, int cx, int cy, int radius, float amount) {
+    dim3 block(16,16);
+    dim3 grid((sim.nx + block.x - 1)/block.x, (sim.ny + block.y - 1)/block.y);
+    k_paint<<<grid, block>>>(sim.d_u, sim.nx, sim.ny, cx, cy, radius, amount);
+}
+
+void heat_kernel_step_naive(HeatSim& sim, float alpha, float dx, float dt) {
+    float r = alpha * dt / (dx*dx); // assume dx == dy
+    dim3 block(16,16);
+    dim3 grid((sim.nx + block.x - 1)/block.x, (sim.ny + block.y - 1)/block.y);
+    k_heat_step<<<grid, block>>>(sim.d_u, sim.d_v, sim.nx, sim.ny, r);
+    // No swap here, just the kernel
+}
+
+
